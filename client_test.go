@@ -2,6 +2,7 @@ package cclient
 
 import (
 	"encoding/json"
+	"github.com/Carcraftz/fhttp/http2"
 	"io"
 	"io/ioutil"
 	"testing"
@@ -25,7 +26,21 @@ func readAndClose(r io.ReadCloser) ([]byte, error) {
 
 const Chrome83Hash = "b32309a26951912be7dba376398abc3b"
 
-var client, _ = NewClient(tls.HelloChrome_83) // cannot throw an error because there is no proxy
+var settings = map[http2.SettingID]uint32{
+	http2.SettingHeaderTableSize:      65536,
+	http2.SettingMaxConcurrentStreams: 1000,
+	http2.SettingInitialWindowSize:    6291456,
+	http2.SettingMaxHeaderListSize:    262144,
+}
+
+var settingsOrder = []http2.SettingID{
+	http2.SettingHeaderTableSize,
+	http2.SettingMaxConcurrentStreams,
+	http2.SettingInitialWindowSize,
+	http2.SettingMaxHeaderListSize,
+}
+
+var client, _ = NewClient(tls.HelloChrome_83, "", true, 6, settings, settingsOrder) // cannot throw an error because there is no proxy
 
 func TestCClient_JA3(t *testing.T) {
 	resp, err := client.Get("https://ja3er.com/json")

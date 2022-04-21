@@ -22,6 +22,8 @@ type roundTripper struct {
 	sync.Mutex
 
 	clientHelloId utls.ClientHelloID
+	settings      map[http2.SettingID]uint32
+	settingsOrder []http2.SettingID
 
 	cachedConnections map[string]net.Conn
 	cachedTransports  map[string]http.RoundTripper
@@ -98,13 +100,32 @@ func (rt *roundTripper) dialTLS(ctx context.Context, network, addr string) (net.
 	switch conn.ConnectionState().NegotiatedProtocol {
 	case http2.NextProtoTLS:
 		t2 := http2.Transport{DialTLS: rt.dialTLSHTTP2}
-		t2.Settings = []http2.Setting{
-			{ID: http2.SettingMaxConcurrentStreams, Val: 1000},
-			{ID: http2.SettingMaxFrameSize, Val: 16384},
-			{ID: http2.SettingMaxHeaderListSize, Val: 262144},
+
+		if rt.settings == nil {
+			// when we not provide a map of custom http2 settings
+			t2.Settings = map[http2.SettingID]uint32{
+				http2.SettingMaxConcurrentStreams: 1000,
+				http2.SettingMaxFrameSize:         16384,
+				http2.SettingInitialWindowSize:    6291456,
+				http2.SettingHeaderTableSize:      65536,
+			}
+
+			keys := make([]http2.SettingID, len(t2.Settings))
+
+			i := 0
+			// attention: the order might be random here for default values!
+			for k := range t2.Settings {
+				keys[i] = k
+				i++
+			}
+
+			t2.SettingsOrder = keys
+		} else {
+			// use custom http2 settings
+			t2.Settings = rt.settings
+			t2.SettingsOrder = rt.settingsOrder
 		}
-		t2.InitialWindowSize = 6291456
-		t2.HeaderTableSize = 65536
+
 		t2.PushHandler = &http2.DefaultPushHandler{}
 		rt.cachedTransports[addr] = &t2
 	default:
@@ -131,22 +152,22 @@ func (rt *roundTripper) getDialTLSAddr(req *http.Request) string {
 	return net.JoinHostPort(req.URL.Host, "443") // we can assume port is 443 at this point
 }
 
-func newRoundTripper(clientHello utls.ClientHelloID, dialer ...proxy.ContextDialer) http.RoundTripper {
+func newRoundTripper(clientHello utls.ClientHelloID, settings map[http2.SettingID]uint32, settingsOrder []http2.SettingID, dialer ...proxy.ContextDialer) http.RoundTripper {
 	if len(dialer) > 0 {
 		return &roundTripper{
-			dialer: dialer[0],
-
-			clientHelloId: clientHello,
-
+			dialer:            dialer[0],
+			settings:          settings,
+			settingsOrder:     settingsOrder,
+			clientHelloId:     clientHello,
 			cachedTransports:  make(map[string]http.RoundTripper),
 			cachedConnections: make(map[string]net.Conn),
 		}
 	} else {
 		return &roundTripper{
-			dialer: proxy.Direct,
-
-			clientHelloId: clientHello,
-
+			dialer:            proxy.Direct,
+			settings:          settings,
+			settingsOrder:     settingsOrder,
+			clientHelloId:     clientHello,
 			cachedTransports:  make(map[string]http.RoundTripper),
 			cachedConnections: make(map[string]net.Conn),
 		}
