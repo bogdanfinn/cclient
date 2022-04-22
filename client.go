@@ -12,7 +12,7 @@ import (
 	utls "github.com/Carcraftz/utls"
 )
 
-func NewClient(clientHello utls.ClientHelloID, proxyUrl string, allowRedirect bool, timeout time.Duration, settings map[http2.SettingID]uint32, settingsOrder []http2.SettingID) (http.Client, error) {
+func NewClient(clientHello utls.ClientHelloID, proxyUrl string, allowRedirect bool, timeout time.Duration, settings map[http2.SettingID]uint32, settingsOrder []http2.SettingID, insecureSkipVerify bool) (http.Client, error) {
 	if len(proxyUrl) > 0 {
 		dialer, err := newConnectDialer(proxyUrl)
 		if err != nil {
@@ -36,14 +36,14 @@ func NewClient(clientHello utls.ClientHelloID, proxyUrl string, allowRedirect bo
 			cJar, _ := cookiejar.New(nil)
 			return http.Client{
 				Jar:       cJar,
-				Transport: newRoundTripper(clientHello, settings, settingsOrder, dialer),
+				Transport: newRoundTripper(clientHello, settings, settingsOrder, insecureSkipVerify, dialer),
 				Timeout:   time.Second * timeout,
 			}, nil
 		}
 		cJar, _ := cookiejar.New(nil)
 		return http.Client{
 			Jar:       cJar,
-			Transport: newRoundTripper(clientHello, settings, settingsOrder, dialer),
+			Transport: newRoundTripper(clientHello, settings, settingsOrder, insecureSkipVerify, dialer),
 			Timeout:   time.Second * timeout,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return http.ErrUseLastResponse
@@ -54,14 +54,14 @@ func NewClient(clientHello utls.ClientHelloID, proxyUrl string, allowRedirect bo
 			cJar, _ := cookiejar.New(nil)
 			return http.Client{
 				Jar:       cJar,
-				Transport: newRoundTripper(clientHello, settings, settingsOrder, proxy.Direct),
+				Transport: newRoundTripper(clientHello, settings, settingsOrder, insecureSkipVerify, proxy.Direct),
 				Timeout:   time.Second * timeout,
 			}, nil
 		}
 		cJar, _ := cookiejar.New(nil)
 		return http.Client{
 			Jar:       cJar,
-			Transport: newRoundTripper(clientHello, settings, settingsOrder, proxy.Direct),
+			Transport: newRoundTripper(clientHello, settings, settingsOrder, insecureSkipVerify, proxy.Direct),
 			Timeout:   time.Second * timeout,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return http.ErrUseLastResponse

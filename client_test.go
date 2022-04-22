@@ -40,7 +40,9 @@ var settingsOrder = []http2.SettingID{
 	http2.SettingMaxHeaderListSize,
 }
 
-var client, _ = NewClient(tls.HelloChrome_83, "", true, 6, settings, settingsOrder) // cannot throw an error because there is no proxy
+var skipVerifyForInsecureCertificates = true
+
+var client, _ = NewClient(tls.HelloChrome_83, "", true, 6, settings, settingsOrder, skipVerifyForInsecureCertificates) // cannot throw an error because there is no proxy
 
 func TestCClient_JA3(t *testing.T) {
 	resp, err := client.Get("https://ja3er.com/json")

@@ -25,6 +25,8 @@ type roundTripper struct {
 	settings      map[http2.SettingID]uint32
 	settingsOrder []http2.SettingID
 
+	insecureSkipVerify bool
+
 	cachedConnections map[string]net.Conn
 	cachedTransports  map[string]http.RoundTripper
 
@@ -85,7 +87,7 @@ func (rt *roundTripper) dialTLS(ctx context.Context, network, addr string) (net.
 		host = addr
 	}
 
-	conn := utls.UClient(rawConn, &utls.Config{ServerName: host}, rt.clientHelloId)
+	conn := utls.UClient(rawConn, &utls.Config{ServerName: host, InsecureSkipVerify: rt.insecureSkipVerify}, rt.clientHelloId)
 	if err = conn.Handshake(); err != nil {
 		_ = conn.Close()
 		return nil, err
@@ -99,7 +101,7 @@ func (rt *roundTripper) dialTLS(ctx context.Context, network, addr string) (net.
 	// of ALPN.
 	switch conn.ConnectionState().NegotiatedProtocol {
 	case http2.NextProtoTLS:
-		t2 := http2.Transport{DialTLS: rt.dialTLSHTTP2}
+		t2 := http2.Transport{DialTLS: rt.dialTLSHTTP2, TLSClientConfig: &utls.Config{InsecureSkipVerify: rt.insecureSkipVerify}}
 
 		if rt.settings == nil {
 			// when we not provide a map of custom http2 settings
@@ -130,7 +132,7 @@ func (rt *roundTripper) dialTLS(ctx context.Context, network, addr string) (net.
 		rt.cachedTransports[addr] = &t2
 	default:
 		// Assume the remote peer is speaking HTTP 1.x + TLS.
-		rt.cachedTransports[addr] = &http.Transport{DialTLSContext: rt.dialTLS}
+		rt.cachedTransports[addr] = &http.Transport{DialTLSContext: rt.dialTLS, TLSClientConfig: &utls.Config{InsecureSkipVerify: rt.insecureSkipVerify}}
 	}
 
 	// Stash the connection just established for use servicing the
@@ -152,24 +154,26 @@ func (rt *roundTripper) getDialTLSAddr(req *http.Request) string {
 	return net.JoinHostPort(req.URL.Host, "443") // we can assume port is 443 at this point
 }
 
-func newRoundTripper(clientHello utls.ClientHelloID, settings map[http2.SettingID]uint32, settingsOrder []http2.SettingID, dialer ...proxy.ContextDialer) http.RoundTripper {
+func newRoundTripper(clientHello utls.ClientHelloID, settings map[http2.SettingID]uint32, settingsOrder []http2.SettingID, insecureSkipVerify bool, dialer ...proxy.ContextDialer) http.RoundTripper {
 	if len(dialer) > 0 {
 		return &roundTripper{
-			dialer:            dialer[0],
-			settings:          settings,
-			settingsOrder:     settingsOrder,
-			clientHelloId:     clientHello,
-			cachedTransports:  make(map[string]http.RoundTripper),
-			cachedConnections: make(map[string]net.Conn),
+			dialer:             dialer[0],
+			settings:           settings,
+			settingsOrder:      settingsOrder,
+			insecureSkipVerify: insecureSkipVerify,
+			clientHelloId:      clientHello,
+			cachedTransports:   make(map[string]http.RoundTripper),
+			cachedConnections:  make(map[string]net.Conn),
 		}
 	} else {
 		return &roundTripper{
-			dialer:            proxy.Direct,
-			settings:          settings,
-			settingsOrder:     settingsOrder,
-			clientHelloId:     clientHello,
-			cachedTransports:  make(map[string]http.RoundTripper),
-			cachedConnections: make(map[string]net.Conn),
+			dialer:             proxy.Direct,
+			settings:           settings,
+			settingsOrder:      settingsOrder,
+			insecureSkipVerify: insecureSkipVerify,
+			clientHelloId:      clientHello,
+			cachedTransports:   make(map[string]http.RoundTripper),
+			cachedConnections:  make(map[string]net.Conn),
 		}
 	}
 }
